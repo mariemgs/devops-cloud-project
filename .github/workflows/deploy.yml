@@ -1,0 +1,49 @@
+name: Build and Deploy
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "app/**"
+      - ".github/workflows/deploy.yml"
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Test Docker build
+        run: docker build -t meriem-devops-app ./app
+
+      - name: Configure SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.VM_SSH_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -H "${{ secrets.VM_HOST }}" >> ~/.ssh/known_hosts
+
+      - name: Copy application files
+        run: |
+          ssh ${{ secrets.VM_USER }}@${{ secrets.VM_HOST }} "mkdir -p ~/myapp"
+          scp -r app/* ${{ secrets.VM_USER }}@${{ secrets.VM_HOST }}:~/myapp/
+
+      - name: Deploy application
+        run: |
+          ssh ${{ secrets.VM_USER }}@${{ secrets.VM_HOST }} << 'EOF'
+            cd ~/myapp
+
+            docker build -t meriem-devops-app .
+
+            docker stop meriem-app || true
+            docker rm meriem-app || true
+
+            docker run -d \
+              --name meriem-app \
+              --restart unless-stopped \
+              -p 80:80 \
+              meriem-devops-app
+          EOF
