@@ -100,3 +100,10 @@ resource "azurerm_network_security_rule" "allow_http" {
   resource_group_name         = azurerm_resource_group.devops_rg.name
   network_security_group_name = azurerm_network_security_group.devops_nsg.name
 }
+resource "azurerm_container_registry" "devops_acr" {
+  name                = "meriemdevopsacr2026"
+  resource_group_name = azurerm_resource_group.devops_rg.name
+  location            = azurerm_virtual_network.devops_vnet.location
+  sku                 = "Basic"
+  admin_enabled       = true
+}

@@ -16,8 +16,23 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Test Docker build
-        run: docker build -t meriem-devops-app ./app
+      - name: Log in to Azure Container Registry
+        run: |
+          echo "${{ secrets.ACR_PASSWORD }}" | docker login \
+            meriemdevopsacr2026.azurecr.io \
+            -u "${{ secrets.ACR_USERNAME }}" \
+            --password-stdin
+
+      - name: Build Docker image
+        run: |
+          docker build \
+            -t meriemdevopsacr2026.azurecr.io/meriem-app:latest \
+            ./app
+
+      - name: Push Docker image to ACR
+        run: |
+          docker push \
+            meriemdevopsacr2026.azurecr.io/meriem-app:latest
 
       - name: Configure SSH
         run: |
@@ -26,17 +41,15 @@ jobs:
           chmod 600 ~/.ssh/id_rsa
           ssh-keyscan -H "${{ secrets.VM_HOST }}" >> ~/.ssh/known_hosts
 
-      - name: Copy application files
-        run: |
-          ssh ${{ secrets.VM_USER }}@${{ secrets.VM_HOST }} "mkdir -p ~/myapp"
-          scp -r app/* ${{ secrets.VM_USER }}@${{ secrets.VM_HOST }}:~/myapp/
-
-      - name: Deploy application
+      - name: Deploy image to VM
         run: |
           ssh ${{ secrets.VM_USER }}@${{ secrets.VM_HOST }} << 'EOF'
-            cd ~/myapp
+            echo "${{ secrets.ACR_PASSWORD }}" | docker login \
+              meriemdevopsacr2026.azurecr.io \
+              -u "${{ secrets.ACR_USERNAME }}" \
+              --password-stdin
 
-            docker build -t meriem-devops-app .
+            docker pull meriemdevopsacr2026.azurecr.io/meriem-app:latest
 
             docker stop meriem-app || true
             docker rm meriem-app || true
@@ -45,5 +58,5 @@ jobs:
               --name meriem-app \
               --restart unless-stopped \
               -p 80:80 \
-              meriem-devops-app
+              meriemdevopsacr2026.azurecr.io/meriem-app:latest
           EOF
