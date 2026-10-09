@@ -1,12 +1,13 @@
-name: Build and Deploy to AKS
+name: Build and Deploy Fullstack App
 
 on:
   push:
     branches:
       - main
     paths:
-      - "app/**"
-      - "k8s/**"
+      - "fullstack-app/frontend/**"
+      - "fullstack-app/backend/**"
+      - "k8s/fullstack/**"
       - ".github/workflows/deploy.yml"
 
 jobs:
@@ -17,21 +18,41 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Log in to Azure Container Registry
+      # -------------------------
+      # Login to ACR
+      # -------------------------
+      - name: Login to Azure Container Registry
         run: |
           echo "${{ secrets.ACR_PASSWORD }}" | docker login \
             meriemdevopsacr2026.azurecr.io \
             -u "${{ secrets.ACR_USERNAME }}" \
             --password-stdin
 
-      - name: Build Docker image
+      # -------------------------
+      # Build Backend
+      # -------------------------
+      - name: Build backend image
         run: |
           docker build \
-            -t meriemdevopsacr2026.azurecr.io/meriem-app:${{ github.sha }} \
-            -t meriemdevopsacr2026.azurecr.io/meriem-app:latest \
-            ./app
+            -t meriemdevopsacr2026.azurecr.io/fullstack-backend:${{ github.sha }} \
+            -t meriemdevopsacr2026.azurecr.io/fullstack-backend:latest \
+            ./fullstack-app/backend
 
-      - name: Scan Docker image with Trivy
+      # -------------------------
+      # Build Frontend
+      # -------------------------
+      - name: Build frontend image
+        run: |
+          docker build \
+            --build-arg VITE_API_BASE_URL="" \
+            -t meriemdevopsacr2026.azurecr.io/fullstack-frontend:${{ github.sha }} \
+            -t meriemdevopsacr2026.azurecr.io/fullstack-frontend:latest \
+            ./fullstack-app/frontend
+
+      # -------------------------
+      # Security Scanning
+      # -------------------------
+      - name: Scan backend with Trivy
         run: |
           docker run --rm \
             -v /var/run/docker.sock:/var/run/docker.sock \
@@ -40,13 +61,35 @@ jobs:
             --severity HIGH,CRITICAL \
             --ignore-unfixed \
             --exit-code 1 \
-            meriemdevopsacr2026.azurecr.io/meriem-app:${{ github.sha }}
+            meriemdevopsacr2026.azurecr.io/fullstack-backend:${{ github.sha }}
 
-      - name: Push Docker image
+      - name: Scan frontend with Trivy
         run: |
-          docker push meriemdevopsacr2026.azurecr.io/meriem-app:${{ github.sha }}
-          docker push meriemdevopsacr2026.azurecr.io/meriem-app:latest
+          docker run --rm \
+            -v /var/run/docker.sock:/var/run/docker.sock \
+            aquasec/trivy:latest \
+            image \
+            --severity HIGH,CRITICAL \
+            --ignore-unfixed \
+            --exit-code 1 \
+            meriemdevopsacr2026.azurecr.io/fullstack-frontend:${{ github.sha }}
 
+      # -------------------------
+      # Push Images
+      # -------------------------
+      - name: Push backend image
+        run: |
+          docker push meriemdevopsacr2026.azurecr.io/fullstack-backend:${{ github.sha }}
+          docker push meriemdevopsacr2026.azurecr.io/fullstack-backend:latest
+
+      - name: Push frontend image
+        run: |
+          docker push meriemdevopsacr2026.azurecr.io/fullstack-frontend:${{ github.sha }}
+          docker push meriemdevopsacr2026.azurecr.io/fullstack-frontend:latest
+
+      # -------------------------
+      # Azure / AKS
+      # -------------------------
       - name: Azure login
         uses: azure/login@v2
         with:
@@ -59,18 +102,28 @@ jobs:
             --name aks-devops \
             --overwrite-existing
 
-      - name: Apply Kubernetes manifests
+      # -------------------------
+      # Deploy
+      # -------------------------
+      - name: Apply Kubernetes configuration
         run: |
-          kubectl apply -f k8s/configmap.yml
-          kubectl apply -f k8s/secret.yml
-          kubectl apply -f k8s/service.yml
-          kubectl apply -f k8s/ingress.yml
+          kubectl apply -f k8s/fullstack/configmap.yml
+          kubectl apply -f k8s/fullstack/postgres.yml
+          kubectl apply -f k8s/fullstack/backend.yml
+          kubectl apply -f k8s/fullstack/frontend.yml
 
-      - name: Deploy new image to AKS
+      - name: Deploy SHA images
         run: |
-          kubectl set image deployment/meriem-app \
-            meriem-app=meriemdevopsacr2026.azurecr.io/meriem-app:${{ github.sha }}
+          kubectl set image deployment/backend \
+            backend=meriemdevopsacr2026.azurecr.io/fullstack-backend:${{ github.sha }}
 
-      - name: Wait for rollout
+          kubectl set image deployment/frontend \
+            frontend=meriemdevopsacr2026.azurecr.io/fullstack-frontend:${{ github.sha }}
+
+      - name: Wait for backend rollout
         run: |
-          kubectl rollout status deployment/meriem-app --timeout=180s
+          kubectl rollout status deployment/backend --timeout=180s
+
+      - name: Wait for frontend rollout
+        run: |
+          kubectl rollout status deployment/frontend --timeout=180s
