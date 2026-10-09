@@ -31,6 +31,17 @@ jobs:
             -t meriemdevopsacr2026.azurecr.io/meriem-app:latest \
             ./app
 
+      - name: Scan Docker image with Trivy
+        run: |
+          docker run --rm \
+            -v /var/run/docker.sock:/var/run/docker.sock \
+            aquasec/trivy:latest \
+            image \
+            --severity HIGH,CRITICAL \
+            --ignore-unfixed \
+            --exit-code 1 \
+            meriemdevopsacr2026.azurecr.io/meriem-app:${{ github.sha }}
+
       - name: Push Docker image
         run: |
           docker push meriemdevopsacr2026.azurecr.io/meriem-app:${{ github.sha }}
