@@ -9,6 +9,7 @@ on:
       - "fullstack-app/backend/**"
       - "k8s/fullstack/**"
       - ".github/workflows/deploy.yml"
+      - ".trivyignore"
 
 jobs:
   deploy:
@@ -44,12 +45,14 @@ jobs:
         run: |
           docker run --rm \
             -v /var/run/docker.sock:/var/run/docker.sock \
+            -v "$PWD/.trivyignore:/root/.trivyignore:ro" \
             aquasec/trivy:latest \
             image \
             --scanners vuln \
             --detection-priority precise \
             --severity HIGH,CRITICAL \
             --ignore-unfixed \
+            --ignorefile /root/.trivyignore \
             --exit-code 1 \
             meriemdevopsacr2026.azurecr.io/fullstack-backend:${{ github.sha }}
 
@@ -57,12 +60,14 @@ jobs:
         run: |
           docker run --rm \
             -v /var/run/docker.sock:/var/run/docker.sock \
+            -v "$PWD/.trivyignore:/root/.trivyignore:ro" \
             aquasec/trivy:latest \
             image \
             --scanners vuln \
             --detection-priority precise \
             --severity HIGH,CRITICAL \
             --ignore-unfixed \
+            --ignorefile /root/.trivyignore \
             --exit-code 1 \
             meriemdevopsacr2026.azurecr.io/fullstack-frontend:${{ github.sha }}
 
