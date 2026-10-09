@@ -1,4 +1,4 @@
-name: Build and Deploy
+name: Build and Deploy to AKS
 
 on:
   push:
@@ -6,6 +6,7 @@ on:
       - main
     paths:
       - "app/**"
+      - "k8s/**"
       - ".github/workflows/deploy.yml"
 
 jobs:
@@ -26,37 +27,39 @@ jobs:
       - name: Build Docker image
         run: |
           docker build \
+            -t meriemdevopsacr2026.azurecr.io/meriem-app:${{ github.sha }} \
             -t meriemdevopsacr2026.azurecr.io/meriem-app:latest \
             ./app
 
-      - name: Push Docker image to ACR
+      - name: Push Docker image
         run: |
-          docker push \
-            meriemdevopsacr2026.azurecr.io/meriem-app:latest
+          docker push meriemdevopsacr2026.azurecr.io/meriem-app:${{ github.sha }}
+          docker push meriemdevopsacr2026.azurecr.io/meriem-app:latest
 
-      - name: Configure SSH
+      - name: Azure login
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Get AKS credentials
         run: |
-          mkdir -p ~/.ssh
-          printf '%s\n' "${{ secrets.VM_SSH_KEY }}" > ~/.ssh/id_rsa
-          chmod 600 ~/.ssh/id_rsa
-          ssh-keyscan -H "${{ secrets.VM_HOST }}" >> ~/.ssh/known_hosts
+          az aks get-credentials \
+            --resource-group rg-devops-project \
+            --name aks-devops \
+            --overwrite-existing
 
-      - name: Deploy image to VM
+      - name: Apply Kubernetes manifests
         run: |
-          ssh ${{ secrets.VM_USER }}@${{ secrets.VM_HOST }} << 'EOF'
-            echo "${{ secrets.ACR_PASSWORD }}" | docker login \
-              meriemdevopsacr2026.azurecr.io \
-              -u "${{ secrets.ACR_USERNAME }}" \
-              --password-stdin
+          kubectl apply -f k8s/configmap.yml
+          kubectl apply -f k8s/secret.yml
+          kubectl apply -f k8s/service.yml
+          kubectl apply -f k8s/ingress.yml
 
-            docker pull meriemdevopsacr2026.azurecr.io/meriem-app:latest
+      - name: Deploy new image to AKS
+        run: |
+          kubectl set image deployment/meriem-app \
+            meriem-app=meriemdevopsacr2026.azurecr.io/meriem-app:${{ github.sha }}
 
-            docker stop meriem-app || true
-            docker rm meriem-app || true
-
-            docker run -d \
-              --name meriem-app \
-              --restart unless-stopped \
-              -p 80:80 \
-              meriemdevopsacr2026.azurecr.io/meriem-app:latest
-          EOF
+      - name: Wait for rollout
+        run: |
+          kubectl rollout status deployment/meriem-app --timeout=180s

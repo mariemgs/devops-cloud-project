@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: meriem-app-config
+data:
+  APP_ENV: "production"
+  APP_MESSAGE: "Running on AKS"
