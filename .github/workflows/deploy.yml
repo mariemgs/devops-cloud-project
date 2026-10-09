@@ -37,6 +37,15 @@ jobs:
             -t meriemdevopsacr2026.azurecr.io/fullstack-backend:${{ github.sha }} \
             -t meriemdevopsacr2026.azurecr.io/fullstack-backend:latest \
             ./fullstack-app/backend
+      - name: Inspect backend Python dependencies
+        run: |
+          docker run --rm \
+            meriemdevopsacr2026.azurecr.io/fullstack-backend:${{ github.sha }} \
+            pip freeze
+
+          docker run --rm \
+            meriemdevopsacr2026.azurecr.io/fullstack-backend:${{ github.sha }} \
+            pip show msgpack urllib3 setuptools
 
       # -------------------------
       # Build Frontend
