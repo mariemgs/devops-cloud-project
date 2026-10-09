@@ -47,6 +47,7 @@ jobs:
             aquasec/trivy:latest \
             image \
             --scanners vuln \
+            --detection-priority precise \
             --severity HIGH,CRITICAL \
             --ignore-unfixed \
             --exit-code 1 \
@@ -59,6 +60,7 @@ jobs:
             aquasec/trivy:latest \
             image \
             --scanners vuln \
+            --detection-priority precise \
             --severity HIGH,CRITICAL \
             --ignore-unfixed \
             --exit-code 1 \
