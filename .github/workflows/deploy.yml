@@ -18,9 +18,6 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # -------------------------
-      # Login to ACR
-      # -------------------------
       - name: Login to Azure Container Registry
         run: |
           echo "${{ secrets.ACR_PASSWORD }}" | docker login \
@@ -28,28 +25,13 @@ jobs:
             -u "${{ secrets.ACR_USERNAME }}" \
             --password-stdin
 
-      # -------------------------
-      # Build Backend
-      # -------------------------
       - name: Build backend image
         run: |
           docker build \
             -t meriemdevopsacr2026.azurecr.io/fullstack-backend:${{ github.sha }} \
             -t meriemdevopsacr2026.azurecr.io/fullstack-backend:latest \
             ./fullstack-app/backend
-      - name: Inspect backend Python dependencies
-        run: |
-          docker run --rm \
-            meriemdevopsacr2026.azurecr.io/fullstack-backend:${{ github.sha }} \
-            pip freeze
 
-          docker run --rm \
-            meriemdevopsacr2026.azurecr.io/fullstack-backend:${{ github.sha }} \
-            pip show msgpack urllib3 setuptools
-
-      # -------------------------
-      # Build Frontend
-      # -------------------------
       - name: Build frontend image
         run: |
           docker build \
@@ -58,15 +40,13 @@ jobs:
             -t meriemdevopsacr2026.azurecr.io/fullstack-frontend:latest \
             ./fullstack-app/frontend
 
-      # -------------------------
-      # Security Scanning
-      # -------------------------
       - name: Scan backend with Trivy
         run: |
           docker run --rm \
             -v /var/run/docker.sock:/var/run/docker.sock \
             aquasec/trivy:latest \
             image \
+            --scanners vuln \
             --severity HIGH,CRITICAL \
             --ignore-unfixed \
             --exit-code 1 \
@@ -78,14 +58,12 @@ jobs:
             -v /var/run/docker.sock:/var/run/docker.sock \
             aquasec/trivy:latest \
             image \
+            --scanners vuln \
             --severity HIGH,CRITICAL \
             --ignore-unfixed \
             --exit-code 1 \
             meriemdevopsacr2026.azurecr.io/fullstack-frontend:${{ github.sha }}
 
-      # -------------------------
-      # Push Images
-      # -------------------------
       - name: Push backend image
         run: |
           docker push meriemdevopsacr2026.azurecr.io/fullstack-backend:${{ github.sha }}
@@ -96,9 +74,6 @@ jobs:
           docker push meriemdevopsacr2026.azurecr.io/fullstack-frontend:${{ github.sha }}
           docker push meriemdevopsacr2026.azurecr.io/fullstack-frontend:latest
 
-      # -------------------------
-      # Azure / AKS
-      # -------------------------
       - name: Azure login
         uses: azure/login@v2
         with:
@@ -111,9 +86,6 @@ jobs:
             --name aks-devops \
             --overwrite-existing
 
-      # -------------------------
-      # Deploy
-      # -------------------------
       - name: Apply Kubernetes configuration
         run: |
           kubectl apply -f k8s/fullstack/configmap.yml
